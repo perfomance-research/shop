@@ -86,13 +86,11 @@
     <script>
         // ================= 設定區 =================
         const LIFF_ID = '2009976062-b77cgkLd'; 
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwJMOWTzHOKQzcZmy8AWg92dZsdbQYlXfAwDpKN-7WWVNH86fifWpGU5T0zufKzWKL0/exec';
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwPzM_ux8Q71owo0Kd39tSbBttq1YAQYZ058cyJ_bBXRQNl3EtZts9aTK8otJKoKuLY/exec';
         
-        // 運費設定
         const SHIPPING_COST = 60;
         const FREE_SHIPPING_THRESHOLD = 1000;
 
-        // 模擬商品資料 (第三階段將改由 GAS 從 Google Sheets 動態讀取)
         const products = [
             { id: 'P001', name: '5295泡沫氣壓瓶', price: 350, img: 'https://via.placeholder.com/150?text=氣壓瓶' },
             { id: 'A001', name: '高光澤鍍膜維護劑', price: 890, img: 'https://via.placeholder.com/150?text=維護劑' },
@@ -103,10 +101,11 @@
 
         let currentUser = {};
         let cart = JSON.parse(localStorage.getItem('myCart')) || [];
+        // 新增：從 localStorage 讀取已選擇的門市
+        let selectedStore = JSON.parse(localStorage.getItem('selectedStore')) || null;
 
         document.addEventListener("DOMContentLoaded", async () => {
             renderShop();
-            updateCartUI();
 
             try {
                 await liff.init({ liffId: LIFF_ID });
@@ -117,35 +116,45 @@
                 const profile = await liff.getProfile();
                 currentUser = { userId: profile.userId, displayName: profile.displayName };
 
-                // 若是從 Flex Message 點擊特定商品進來
                 const urlParams = new URLSearchParams(window.location.search);
+                
+                // 狀況 A：從地圖選完門市跳轉回來
+                const storeNameParam = urlParams.get('storeName');
+                const storeAddressParam = urlParams.get('storeAddress');
+                if (storeNameParam) {
+                    selectedStore = { name: storeNameParam, address: storeAddressParam };
+                    localStorage.setItem('selectedStore', JSON.stringify(selectedStore));
+                    window.history.replaceState({}, document.title, window.location.pathname); // 讓網址變乾淨
+                    switchView('cart');
+                }
+
+                // 狀況 B：從 Flex Message 點擊商品進來
                 const newProductId = urlParams.get('productId');
                 if (newProductId) {
                     addToCart(newProductId);
                     window.history.replaceState({}, document.title, window.location.pathname);
-                    switchView('cart'); // 直接跳轉到購物車
+                    switchView('cart');
                 }
+
+                // 更新畫面
+                updateCartUI();
 
             } catch (err) {
                 console.error('LIFF Init Error', err);
             }
         });
 
-        // ----- UI 切換邏輯 -----
         function switchView(viewName) {
             document.getElementById('view-shop').classList.add('hidden');
             document.getElementById('view-cart').classList.add('hidden');
             document.getElementById('view-orders').classList.add('hidden');
-            
             document.getElementById('nav-shop').classList.remove('text-black');
             document.getElementById('nav-cart').classList.remove('text-black');
             document.getElementById('nav-orders').classList.remove('text-black');
-
             document.getElementById(`view-${viewName}`).classList.remove('hidden');
             document.getElementById(`nav-${viewName}`).classList.add('text-black');
         }
 
-        // ----- 商品列表渲染 -----
         function renderShop() {
             const container = document.getElementById('productList');
             container.innerHTML = products.map(p => `
@@ -162,17 +171,12 @@
             `).join('');
         }
 
-        // ----- 購物車核心邏輯 -----
         function addToCart(productId) {
             const product = products.find(p => p.id === productId);
             if (!product) return;
-
             const existingItem = cart.find(item => item.id === productId);
-            if (existingItem) {
-                existingItem.qty += 1;
-            } else {
-                cart.push({ id: product.id, name: product.name, price: product.price, qty: 1 });
-            }
+            if (existingItem) existingItem.qty += 1;
+            else cart.push({ id: product.id, name: product.name, price: product.price, qty: 1 });
             saveCart();
             Swal.fire({ title: '已加入購物車', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
         }
@@ -181,9 +185,7 @@
             const item = cart.find(item => item.id === productId);
             if (item) {
                 item.qty += amount;
-                if (item.qty <= 0) {
-                    cart = cart.filter(i => i.id !== productId); // 數量小於等於0則移除
-                }
+                if (item.qty <= 0) cart = cart.filter(i => i.id !== productId);
                 saveCart();
             }
         }
@@ -198,7 +200,6 @@
             const badge = document.getElementById('cartBadge');
             const btn = document.getElementById('checkoutBtn');
             
-            // 計算小計與徽章數量
             let subTotal = 0;
             let totalQty = 0;
             let cartHtml = '';
@@ -207,7 +208,7 @@
                 subTotal += (item.price * item.qty);
                 totalQty += item.qty;
                 cartHtml += `
-                    <div class="flex items-center bg-white p-3 rounded-xl shadow-sm">
+                    <div class="flex items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100">
                         <div class="flex-1">
                             <p class="text-sm font-bold text-gray-800">${item.name}</p>
                             <p class="text-xs text-red-500 mt-1">NT$ ${item.price}</p>
@@ -221,20 +222,42 @@
                 `;
             });
 
-            // 處理運費邏輯
+            // 運費計算
             let shippingFee = subTotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
-            if (cart.length === 0) shippingFee = 0; // 沒東西不收運費
+            if (cart.length === 0) shippingFee = 0;
             let totalAmount = subTotal + shippingFee;
 
-            // 更新畫面文字
             if (cart.length === 0) {
-                container.innerHTML = '<div class="text-center py-10 text-gray-400"><i class="fa-solid fa-box-open text-4xl mb-2"></i><p>購物車空空如也</p></div>';
+                container.innerHTML = '<div class="text-center py-10 text-gray-400"><p>購物車空空如也</p></div>';
                 btn.disabled = true;
                 btn.classList.add('opacity-50');
+                btn.innerText = '購物車是空的';
             } else {
-                container.innerHTML = cartHtml;
-                btn.disabled = false;
-                btn.classList.remove('opacity-50');
+                // 如果已經選擇門市，顯示門市資訊並改變按鈕為「結帳」
+                if (selectedStore) {
+                    cartHtml += `
+                        <div class="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-blue-500 font-bold mb-1"><i class="fa-solid fa-location-dot mr-1"></i>取件門市</p>
+                                <p class="text-sm font-semibold text-gray-800">${selectedStore.name}</p>
+                                <p class="text-xs text-gray-500 truncate w-48">${selectedStore.address}</p>
+                            </div>
+                            <button onclick="openECPayMap()" class="text-xs text-blue-600 underline">重選</button>
+                        </div>
+                    `;
+                    container.innerHTML = cartHtml;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50');
+                    btn.innerText = `確認付款 (NT$ ${totalAmount})`;
+                    btn.onclick = () => submitOrder(totalAmount);
+                } else {
+                    // 如果還沒選門市，按鈕功能設定為「開啟地圖」
+                    container.innerHTML = cartHtml;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50');
+                    btn.innerText = '選擇 7-11 取件門市';
+                    btn.onclick = openECPayMap;
+                }
             }
 
             document.getElementById('subTotal').innerText = `NT$ ${subTotal}`;
@@ -249,11 +272,77 @@
             }
         }
 
-        // ----- 結帳觸發 (暫時保留之前的 GAS 呼叫，下一階段將改為呼叫 7-11 地圖) -----
-        document.getElementById('checkoutBtn').addEventListener('click', async () => {
-            Swal.fire('系統升級中', '我們即將在下一階段導入 7-11 電子地圖選擇門市功能！', 'info');
-            // TODO: 在第二階段，這裡將改為呼叫綠界 Logistics API
-        });
+        // 呼叫綠界 7-11 電子地圖 (動態產生 Form 並跳轉)
+        function openECPayMap() {
+            Swal.fire({ title: '載入地圖中...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }});
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'https://logistics-stage.ecpay.com.tw/Express/map';
+            
+            const params = {
+                MerchantID: '3002607',
+                LogisticsType: 'CVS',
+                LogisticsSubType: 'UNIMARTC2C', // 7-11 交貨便
+                IsCollection: 'N',              // N=純取貨 (因為我們會先用 LINE Pay 結帳)
+                ServerReplyURL: GAS_API_URL     // 讓地圖把結果 POST 給我們的 GAS
+            };
+
+            for (const key in params) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = params[key];
+                form.appendChild(input);
+            }
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        // 送出最終訂單到 GAS 進行金流結帳
+        async function submitOrder(totalAmount) {
+            Swal.fire({ title: '建立訂單中...', text: '請稍候，安全連線至金流中心', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }});
+            try {
+                const itemNames = cart.map(item => `${item.name} x${item.qty}`).join(', ');
+                const payload = {
+                    action: 'createOrder',
+                    userId: currentUser.userId,
+                    displayName: currentUser.displayName,
+                    productName: itemNames,
+                    amount: totalAmount,
+                    shippingMethod: `7-11 ${selectedStore.name} (${selectedStore.address})`
+                };
+
+                const response = await fetch(GAS_API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // 結帳前清空暫存
+                    localStorage.removeItem('myCart');
+                    localStorage.removeItem('selectedStore');
+                    
+                    // 動態產生 Form 導向綠界金流
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = result.ecpayUrl;
+                    for (const key in result.ecpayParams) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = result.ecpayParams[key];
+                        form.appendChild(input);
+                    }
+                    document.body.appendChild(form);
+                    form.submit();
+                } else throw new Error(result.message);
+
+            } catch (err) {
+                Swal.fire('結帳發生錯誤', err.message, 'error');
+            }
+        }
     </script>
 </body>
 </html>
