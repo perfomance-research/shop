@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快速結帳</title>
+    <!-- 引入 Tailwind CSS 快速美化介面 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 LINE LIFF SDK -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <!-- 引入 SweetAlert2 做有質感的載入動畫 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col items-center justify-center p-4">
+    
+    <!-- 結帳主畫面 -->
+    <div id="app" class="bg-white rounded-xl shadow-lg w-full max-w-md p-6 hidden">
+        <h1 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">訂單確認</h1>
+        
+        <div class="mb-4">
+            <p class="text-sm text-gray-500">購買商品</p>
+            <p id="productName" class="text-lg font-semibold text-gray-800">載入中...</p>
+        </div>
+        
+        <div class="mb-6">
+            <p class="text-sm text-gray-500">結帳金額</p>
+            <p id="productPrice" class="text-2xl font-bold text-red-500">NT$ 0</p>
+        </div>
+
+        <button id="checkoutBtn" class="w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+            前往結帳 (LINE Pay / 超商)
+        </button>
+    </div>
+
+    <script>
+        // ================= 設定區 =================
+        const LIFF_ID = '請填入你的_LIFF_ID'; // 等等去 LINE Developers 申請後填入
+        const GAS_API_URL = '請填入你剛才部署的_GAS_網頁應用程式網址';
+        // ==========================================
+
+        // 模擬商品清單 (實務上可在這裡擴充，或從後端撈取)
+        const products = {
+            'A001': { name: '高光澤車體鍍膜維護劑', price: 890 },
+            'A002': { name: '頂級棕櫚蠟體驗組', price: 1250 }
+        };
+
+        let currentUser = {};
+        let currentProduct = null;
+
+        // 頁面載入後自動執行
+        document.addEventListener("DOMContentLoaded", async () => {
+            try {
+                // 1. 初始化 LIFF
+                await liff.init({ liffId: LIFF_ID });
+                
+                // 若未登入則自動喚起 LINE 登入
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+
+                // 2. 取得 LINE 使用者資料
+                const profile = await liff.getProfile();
+                currentUser = {
+                    userId: profile.userId,
+                    displayName: profile.displayName
+                };
+
+                // 3. 讀取網址參數判斷購買品項 (例如網址帶有 ?productId=A001)
+                const urlParams = new URLSearchParams(window.location.search);
+                const productId = urlParams.get('productId') || 'A001'; // 沒帶參數預設為 A001
+                currentProduct = products[productId] || products['A001'];
+                currentProduct.id = productId;
+
+                // 4. 將資料渲染到畫面上並顯示 UI
+                document.getElementById('productName').innerText = currentProduct.name;
+                document.getElementById('productPrice').innerText = `NT$ ${currentProduct.price}`;
+                document.getElementById('app').classList.remove('hidden');
+
+            } catch (err) {
+                Swal.fire('系統提示', 'LIFF 初始化失敗: ' + err.message, 'error');
+            }
+        });
+
+        // 點擊結帳按鈕事件
+        document.getElementById('checkoutBtn').addEventListener('click', async () => {
+            Swal.fire({
+                title: '建立訂單中...',
+                text: '請稍候，安全連線至金流中心',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            try {
+                // 1. 準備送給 GAS 後端的 JSON payload
+                const payload = {
+                    action: 'createOrder',
+                    userId: currentUser.userId,
+                    displayName: currentUser.displayName,
+                    productId: currentProduct.id,
+                    productName: currentProduct.name,
+                    amount: currentProduct.price,
+                    shippingMethod: '預設' // 這裡可以擴充讓使用者選門市或宅配
+                };
+
+                // 2. 呼叫 GAS API (注意：GAS 接收跨域 POST 必須用 text/plain 以避開 CORS preflight)
+                const response = await fetch(GAS_API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
+                });
+                
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    // 3. 收到綠界回傳參數，開始動態建立 Form 跳轉
+                    submitToECPay(result.ecpayUrl, result.ecpayParams);
+                } else {
+                    throw new Error(result.message);
+                }
+
+            } catch (err) {
+                Swal.fire('結帳發生錯誤', err.message, 'error');
+            }
+        });
+
+        // 核心邏輯：動態產生 Form 並 POST 提交至綠界 AIO CheckOut
+        function submitToECPay(actionUrl, params) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = actionUrl;
+            
+            // 將所有綠界需要的參數轉成隱藏欄位
+            for (const key in params) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = params[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+    </script>
+</body>
+</html>
