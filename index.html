@@ -2,193 +2,258 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>快速結帳</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>5295 STUDIO 專屬商城</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- 引入 FontAwesome 圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-gray-100 h-screen flex flex-col items-center justify-center p-4">
+<body class="bg-gray-50 h-screen flex flex-col font-sans">
     
-    <div id="app" class="bg-white rounded-xl shadow-lg w-full max-w-md p-6 hidden">
-        <h1 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🛒 您的購物車</h1>
+    <!-- 頂部標題 -->
+    <header class="bg-black text-white text-center py-4 shadow-md fixed w-full top-0 z-10">
+        <h1 class="text-lg font-bold tracking-widest">5295 STUDIO</h1>
+    </header>
+
+    <!-- 主要內容區 (預留上下 header/nav 空間) -->
+    <main class="flex-1 overflow-y-auto mt-14 mb-16 p-4">
         
-        <!-- 購物車清單顯示區 -->
-        <div id="cartItems" class="mb-4 space-y-3">
-            <!-- 透過 JS 動態產生商品列表 -->
-        </div>
-        
-        <div class="mb-6 border-t pt-4 flex justify-between items-center">
-            <p class="text-sm text-gray-500">結帳總金額</p>
-            <p id="totalPrice" class="text-2xl font-bold text-red-500">NT$ 0</p>
+        <!-- 視圖 1：商品總覽 (Shop) -->
+        <div id="view-shop" class="space-y-4">
+            <h2 class="text-gray-700 font-bold mb-2"><i class="fa-solid fa-fire text-red-500 mr-2"></i>熱銷商品</h2>
+            <div id="productList" class="grid grid-cols-2 gap-4">
+                <!-- 商品卡片由 JS 動態產生 -->
+            </div>
         </div>
 
-        <button id="checkoutBtn" class="w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
-            前往結帳 (LINE Pay / 超商)
+        <!-- 視圖 2：購物車 (Cart) -->
+        <div id="view-cart" class="hidden">
+            <h2 class="text-gray-700 font-bold mb-4"><i class="fa-solid fa-cart-shopping text-blue-500 mr-2"></i>您的購物車</h2>
+            <div id="cartItems" class="space-y-3 mb-4">
+                <!-- 購物車清單由 JS 動態產生 -->
+            </div>
+            
+            <!-- 結帳金額結算區 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm space-y-2 mb-6">
+                <div class="flex justify-between text-sm text-gray-500">
+                    <span>商品小計</span>
+                    <span id="subTotal">NT$ 0</span>
+                </div>
+                <div class="flex justify-between text-sm text-gray-500">
+                    <span>運費 (滿 NT$1,000 免運)</span>
+                    <span id="shippingFee">NT$ 60</span>
+                </div>
+                <hr class="my-2 border-gray-100">
+                <div class="flex justify-between font-bold text-lg text-gray-800">
+                    <span>結帳總金額</span>
+                    <span id="totalPrice" class="text-red-500">NT$ 0</span>
+                </div>
+            </div>
+
+            <!-- 結帳按鈕 -->
+            <button id="checkoutBtn" class="w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-3 px-4 rounded-xl shadow-md transition duration-200">
+                前往選擇 7-11 門市與結帳
+            </button>
+        </div>
+
+        <!-- 視圖 3：我的訂單 (Orders) -->
+        <div id="view-orders" class="hidden">
+            <h2 class="text-gray-700 font-bold mb-4"><i class="fa-solid fa-receipt text-green-500 mr-2"></i>歷史訂單</h2>
+            <div class="bg-white p-6 rounded-xl shadow-sm text-center">
+                <p class="text-gray-500 text-sm">此功能將在下一階段串接 GAS 後台開放</p>
+                <p class="text-gray-400 text-xs mt-2">屆時可隨時查詢出貨狀態與追蹤單號</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 底部導覽列 (Bottom Navigation) -->
+    <nav class="bg-white border-t fixed w-full bottom-0 flex justify-around text-gray-400 text-xs py-2 pb-safe z-10">
+        <button onclick="switchView('shop')" id="nav-shop" class="flex flex-col items-center p-2 text-black transition">
+            <i class="fa-solid fa-store text-xl mb-1"></i>商品
         </button>
-        <button id="clearCartBtn" class="w-full mt-3 text-gray-500 text-sm hover:text-gray-700 underline">
-            清空購物車
+        <button onclick="switchView('cart')" id="nav-cart" class="flex flex-col items-center p-2 relative transition">
+            <i class="fa-solid fa-cart-shopping text-xl mb-1"></i>購物車
+            <span id="cartBadge" class="absolute top-1 right-2 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] hidden">0</span>
         </button>
-    </div>
+        <button onclick="switchView('orders')" id="nav-orders" class="flex flex-col items-center p-2 transition">
+            <i class="fa-solid fa-user text-xl mb-1"></i>訂單
+        </button>
+    </nav>
 
     <script>
+        // ================= 設定區 =================
         const LIFF_ID = '2009976062-b77cgkLd'; 
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzJXJfyaiLjrf5WN-UJ0CgvZA1zFZ3eSqp8ekpLj-uEyyJ_jDS4ziiGVFmSp_Jy09gO/exec';
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwJMOWTzHOKQzcZmy8AWg92dZsdbQYlXfAwDpKN-7WWVNH86fifWpGU5T0zufKzWKL0/exec';
+        
+        // 運費設定
+        const SHIPPING_COST = 60;
+        const FREE_SHIPPING_THRESHOLD = 1000;
 
-        const products = {
-            'A001': { name: '高光澤車體鍍膜維護劑', price: 890 },
-            'A002': { name: '頂級棕櫚蠟體驗組', price: 1250 },
-            'P001': { name: '5295泡沫氣壓瓶', price: 350 } // <--- 把你的新商品加在這裡！
-        };
+        // 模擬商品資料 (第三階段將改由 GAS 從 Google Sheets 動態讀取)
+        const products = [
+            { id: 'P001', name: '5295泡沫氣壓瓶', price: 350, img: 'https://via.placeholder.com/150?text=氣壓瓶' },
+            { id: 'A001', name: '高光澤鍍膜維護劑', price: 890, img: 'https://via.placeholder.com/150?text=維護劑' },
+            { id: 'A002', name: '頂級棕櫚蠟體驗組', price: 1250, img: 'https://via.placeholder.com/150?text=棕櫚蠟' },
+            { id: 'C001', name: '極細纖維洗車手套', price: 250, img: 'https://via.placeholder.com/150?text=洗車手套' }
+        ];
+        // ==========================================
 
         let currentUser = {};
-        let cart = JSON.parse(localStorage.getItem('myCart')) || []; // 從 LocalStorage 讀取購物車
+        let cart = JSON.parse(localStorage.getItem('myCart')) || [];
 
         document.addEventListener("DOMContentLoaded", async () => {
+            renderShop();
+            updateCartUI();
+
             try {
                 await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) {
                     liff.login();
                     return;
                 }
-
                 const profile = await liff.getProfile();
-                currentUser = {
-                    userId: profile.userId,
-                    displayName: profile.displayName
-                };
+                currentUser = { userId: profile.userId, displayName: profile.displayName };
 
-                // 檢查網址是否有帶入新商品
+                // 若是從 Flex Message 點擊特定商品進來
                 const urlParams = new URLSearchParams(window.location.search);
                 const newProductId = urlParams.get('productId');
-                
-                if (newProductId && products[newProductId]) {
-                    // 檢查購物車內是否已有此商品
-                    const existingItem = cart.find(item => item.id === newProductId);
-                    if (existingItem) {
-                        existingItem.qty += 1;
-                    } else {
-                        cart.push({
-                            id: newProductId,
-                            name: products[newProductId].name,
-                            price: products[newProductId].price,
-                            qty: 1
-                        });
-                    }
-                    // 存回 LocalStorage 並清空網址參數(避免重新整理重複加入)
-                    localStorage.setItem('myCart', JSON.stringify(cart));
+                if (newProductId) {
+                    addToCart(newProductId);
                     window.history.replaceState({}, document.title, window.location.pathname);
+                    switchView('cart'); // 直接跳轉到購物車
                 }
 
-                renderCart();
-                document.getElementById('app').classList.remove('hidden');
-
             } catch (err) {
-                Swal.fire('系統提示', 'LIFF 初始化失敗: ' + err.message, 'error');
+                console.error('LIFF Init Error', err);
             }
         });
 
-        // 渲染購物車畫面
-        function renderCart() {
-            const cartContainer = document.getElementById('cartItems');
-            const totalEl = document.getElementById('totalPrice');
-            cartContainer.innerHTML = '';
+        // ----- UI 切換邏輯 -----
+        function switchView(viewName) {
+            document.getElementById('view-shop').classList.add('hidden');
+            document.getElementById('view-cart').classList.add('hidden');
+            document.getElementById('view-orders').classList.add('hidden');
             
-            if (cart.length === 0) {
-                cartContainer.innerHTML = '<p class="text-gray-400 text-center py-4">購物車目前是空的</p>';
-                totalEl.innerText = 'NT$ 0';
-                document.getElementById('checkoutBtn').disabled = true;
-                document.getElementById('checkoutBtn').classList.add('opacity-50', 'cursor-not-allowed');
-                return;
-            }
+            document.getElementById('nav-shop').classList.remove('text-black');
+            document.getElementById('nav-cart').classList.remove('text-black');
+            document.getElementById('nav-orders').classList.remove('text-black');
 
-            let total = 0;
+            document.getElementById(`view-${viewName}`).classList.remove('hidden');
+            document.getElementById(`nav-${viewName}`).classList.add('text-black');
+        }
+
+        // ----- 商品列表渲染 -----
+        function renderShop() {
+            const container = document.getElementById('productList');
+            container.innerHTML = products.map(p => `
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+                    <img src="${p.img}" alt="${p.name}" class="w-full h-32 object-cover">
+                    <div class="p-3 flex-1 flex flex-col justify-between">
+                        <p class="text-sm text-gray-800 font-bold mb-1">${p.name}</p>
+                        <p class="text-red-500 font-semibold text-sm mb-2">NT$ ${p.price}</p>
+                        <button onclick="addToCart('${p.id}')" class="w-full bg-black text-white text-xs py-2 rounded shadow hover:bg-gray-800 transition">
+                            加入購物車
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ----- 購物車核心邏輯 -----
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            const existingItem = cart.find(item => item.id === productId);
+            if (existingItem) {
+                existingItem.qty += 1;
+            } else {
+                cart.push({ id: product.id, name: product.name, price: product.price, qty: 1 });
+            }
+            saveCart();
+            Swal.fire({ title: '已加入購物車', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+        }
+
+        function changeQty(productId, amount) {
+            const item = cart.find(item => item.id === productId);
+            if (item) {
+                item.qty += amount;
+                if (item.qty <= 0) {
+                    cart = cart.filter(i => i.id !== productId); // 數量小於等於0則移除
+                }
+                saveCart();
+            }
+        }
+
+        function saveCart() {
+            localStorage.setItem('myCart', JSON.stringify(cart));
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const container = document.getElementById('cartItems');
+            const badge = document.getElementById('cartBadge');
+            const btn = document.getElementById('checkoutBtn');
+            
+            // 計算小計與徽章數量
+            let subTotal = 0;
+            let totalQty = 0;
             let cartHtml = '';
+
             cart.forEach(item => {
-                total += item.price * item.qty;
+                subTotal += (item.price * item.qty);
+                totalQty += item.qty;
                 cartHtml += `
-                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded">
-                        <div>
-                            <p class="text-sm font-semibold text-gray-700">${item.name}</p>
-                            <p class="text-xs text-gray-500">NT$ ${item.price} x ${item.qty}</p>
+                    <div class="flex items-center bg-white p-3 rounded-xl shadow-sm">
+                        <div class="flex-1">
+                            <p class="text-sm font-bold text-gray-800">${item.name}</p>
+                            <p class="text-xs text-red-500 mt-1">NT$ ${item.price}</p>
                         </div>
-                        <p class="font-bold text-gray-800">NT$ ${item.price * item.qty}</p>
+                        <div class="flex items-center bg-gray-100 rounded-lg">
+                            <button onclick="changeQty('${item.id}', -1)" class="px-3 py-1 text-gray-600 hover:text-black font-bold">-</button>
+                            <span class="px-2 text-sm font-semibold">${item.qty}</span>
+                            <button onclick="changeQty('${item.id}', 1)" class="px-3 py-1 text-gray-600 hover:text-black font-bold">+</button>
+                        </div>
                     </div>
                 `;
             });
 
-            cartContainer.innerHTML = cartHtml;
-            totalEl.innerText = `NT$ ${total}`;
-            document.getElementById('checkoutBtn').disabled = false;
-            document.getElementById('checkoutBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+            // 處理運費邏輯
+            let shippingFee = subTotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
+            if (cart.length === 0) shippingFee = 0; // 沒東西不收運費
+            let totalAmount = subTotal + shippingFee;
+
+            // 更新畫面文字
+            if (cart.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-gray-400"><i class="fa-solid fa-box-open text-4xl mb-2"></i><p>購物車空空如也</p></div>';
+                btn.disabled = true;
+                btn.classList.add('opacity-50');
+            } else {
+                container.innerHTML = cartHtml;
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+            }
+
+            document.getElementById('subTotal').innerText = `NT$ ${subTotal}`;
+            document.getElementById('shippingFee').innerText = shippingFee === 0 ? 'NT$ 0 (滿額免運)' : `NT$ ${shippingFee}`;
+            document.getElementById('totalPrice').innerText = `NT$ ${totalAmount}`;
+            
+            if(totalQty > 0) {
+                badge.innerText = totalQty;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
         }
 
-        // 清空購物車
-        document.getElementById('clearCartBtn').addEventListener('click', () => {
-            cart = [];
-            localStorage.removeItem('myCart');
-            renderCart();
-        });
-
-        // 點擊結帳按鈕事件
+        // ----- 結帳觸發 (暫時保留之前的 GAS 呼叫，下一階段將改為呼叫 7-11 地圖) -----
         document.getElementById('checkoutBtn').addEventListener('click', async () => {
-            Swal.fire({
-                title: '建立訂單中...',
-                text: '請稍候，安全連線至金流中心',
-                allowOutsideClick: false,
-                didOpen: () => { Swal.showLoading(); }
-            });
-
-            try {
-                // 將購物車商品轉為字串，方便存入 Google Sheets
-                const itemNames = cart.map(item => `${item.name} x${item.qty}`).join(', ');
-                const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-
-                const payload = {
-                    action: 'createOrder',
-                    userId: currentUser.userId,
-                    displayName: currentUser.displayName,
-                    cartDetails: JSON.stringify(cart), // 詳細 JSON 存入資料庫
-                    productName: itemNames,            // 組合名稱給綠界與試算表顯示
-                    amount: totalAmount,
-                    shippingMethod: '預設'
-                };
-
-                const response = await fetch(GAS_API_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
-                });
-                
-                const result = await response.json();
-
-                if (result.status === 'success') {
-                    // 結帳前清空 LocalStorage 的購物車
-                    localStorage.removeItem('myCart');
-                    submitToECPay(result.ecpayUrl, result.ecpayParams);
-                } else {
-                    throw new Error(result.message);
-                }
-
-            } catch (err) {
-                Swal.fire('結帳發生錯誤', err.message, 'error');
-            }
+            Swal.fire('系統升級中', '我們即將在下一階段導入 7-11 電子地圖選擇門市功能！', 'info');
+            // TODO: 在第二階段，這裡將改為呼叫綠界 Logistics API
         });
-
-        function submitToECPay(actionUrl, params) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = actionUrl;
-            for (const key in params) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = params[key];
-                form.appendChild(input);
-            }
-            document.body.appendChild(form);
-            form.submit();
-        }
     </script>
 </body>
 </html>
